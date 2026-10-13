@@ -1,0 +1,177 @@
+name: Build AppGroupProbe IPA
+
+# Сборка тестового приложения AppGroupProbe (main app + WidgetKit extension).
+# IPA собирается БЕЗ подписи (ad-hoc только для встраивания entitlements),
+# финальную подпись выполняет GBox на устройстве пользователя.
+#
+# Триггеры:
+#   • workflow_dispatch — ручной запуск (можно переопределить Bundle ID и App Group)
+#   • push в AppGroupProbe/**, workflow, scripts/**
+
+on:
+  workflow_dispatch:
+    inputs:
+      bundle_id:
+        description: 'Main Bundle ID (пусто = значение из Probe.xcconfig)'
+        required: false
+        default: ''
+      app_group:
+        description: 'App Group (пусто = значение из Probe.xcconfig)'
+        required: false
+        default: ''
+  push:
+    paths:
+      - 'AppGroupProbe/**'
+      - '.github/workflows/build-appgroup-probe.yml'
+      - 'scripts/**'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build & Package Unsigned IPA
+    runs-on: macos-15
+    timeout-minutes: 40
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: |
+          # Берём старший из установленных Xcode (алфавитная сортировка
+          # корректна для реальных имён Xcode_16.4 / Xcode_26 и т.п.).
+          XCODE_PATH=$(ls -d /Applications/Xcode*.app | sort | tail -n 1)
+          echo "Using $XCODE_PATH"
+          sudo xcode-select -s "$XCODE_PATH/Contents/Developer"
+          xcodebuild -version
+          swift --version
+
+      - name: Override identity config (optional inputs)
+        env:
+          INPUT_BUNDLE_ID: ${{ github.event.inputs.bundle_id }}
+          INPUT_APP_GROUP: ${{ github.event.inputs.app_group }}
+        run: |
+          XC="AppGroupProbe/Probe.xcconfig"
+          if [ -n "$INPUT_BUNDLE_ID" ]; then
+            echo "Overriding PROBE_MAIN_BUNDLE_ID=$INPUT_BUNDLE_ID"
+            sed -i '' "s|^PROBE_MAIN_BUNDLE_ID = .*|PROBE_MAIN_BUNDLE_ID = $INPUT_BUNDLE_ID|" "$XC"
+            sed -i '' "s|^PROBE_WIDGET_BUNDLE_ID = .*|PROBE_WIDGET_BUNDLE_ID = $INPUT_BUNDLE_ID.widget|" "$XC"
+          fi
+          if [ -n "$INPUT_APP_GROUP" ]; then
+            echo "Overriding PROBE_APP_GROUP_ID=$INPUT_APP_GROUP"
+            sed -i '' "s|^PROBE_APP_GROUP_ID = .*|PROBE_APP_GROUP_ID = $INPUT_APP_GROUP|" "$XC"
+            # Группа в entitlements обязана совпадать — обновляем project.yml
+            sed -i '' "s|          - group\\..*|          - $INPUT_APP_GROUP|" "AppGroupProbe/project.yml"
+          fi
+          cat "$XC"
+
+      - name: Install XcodeGen
+        run: |
+          brew install xcodegen
+          xcodegen --version
+
+      - name: Generate Xcode project
+        run: |
+          cd AppGroupProbe
+          xcodegen generate
+          ls -la AppGroupProbe.xcodeproj
+
+      - name: Build (unsigned, device SDK)
+        run: |
+          cd AppGroupProbe
+          set -o pipefail
+          xcodebuild \
+            -project AppGroupProbe.xcodeproj \
+            -scheme AppGroupProbe \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            build 2>&1 | tee build.log | grep -E "error:|warning:|BUILD|ProcessInfoPlist|entitlement" || true
+          # Проверяем реальный итог: tee + pipefail уже вернул бы ошибку, но
+          # убедимся явно по логу.
+          if ! grep -q "BUILD SUCCEEDED" build.log; then
+            echo '::error::Сборка не удалась — последние 200 строк лога:'
+            tail -200 build.log
+            exit 1
+          fi
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: AppGroupProbe-build-log
+          path: AppGroupProbe/build.log
+          if-no-files-found: warn
+
+      - name: Locate built .app
+        run: |
+          APP=$(find "AppGroupProbe/build/Build/Products/Release-iphoneos" -maxdepth 1 -name "*.app" -type d | head -n 1)
+          if [ -z "$APP" ]; then
+            echo '::error::Не найден .app в выводе сборки'
+            find "AppGroupProbe/build/Build/Products" -name "*.app" || true
+            exit 1
+          fi
+          echo "APP_PATH=$APP" >> "$GITHUB_ENV"
+          echo "Found app: $APP"
+          if [ ! -d "$APP/PlugIns/AppGroupProbeWidget.appex" ]; then
+            echo '::error::Widget .appex не встроен в PlugIns — сборка прошла без расширения!'
+            exit 1
+          fi
+          ls -la "$APP/PlugIns"
+
+      - name: Ad-hoc sign with entitlements (embed for later re-signing)
+        run: |
+          APP="${{ env.APP_PATH }}"
+          # Ad-hoc подпись (identity "-") не требует сертификата и профиля, но
+          # встраивает entitlements в бинарник: GBox при переподписи увидит
+          # заявленные App Groups и сможет перенести их в финальную подпись.
+          codesign --force --sign - \
+            --entitlements "AppGroupProbe/AppGroupProbeWidget/AppGroupProbeWidget.entitlements" \
+            "$APP/PlugIns/AppGroupProbeWidget.appex"
+          codesign --force --sign - \
+            --entitlements "AppGroupProbe/AppGroupProbe/AppGroupProbe.entitlements" \
+            "$APP"
+          codesign -dvv "$APP/PlugIns/AppGroupProbeWidget.appex" || true
+          codesign -dvv "$APP" || true
+
+      - name: Package unsigned IPA
+        run: |
+          APP="${{ env.APP_PATH }}"
+          mkdir -p Payload
+          cp -R "$APP" Payload/
+          zip -qry AppGroupProbe-unsigned.ipa Payload
+          rm -rf Payload
+          unzip -l AppGroupProbe-unsigned.ipa | head -30
+          echo "IPA_SIZE=$(stat -f%z AppGroupProbe-unsigned.ipa) bytes"
+
+      - name: Audit IPA structure
+        run: |
+          chmod +x scripts/audit-ipa.sh
+          ./scripts/audit-ipa.sh AppGroupProbe-unsigned.ipa 2>&1 | tee audit-report.log
+          # Жёсткий гейт: .app и .appex обязаны присутствовать.
+          if grep -q "APP_MISSING\|WIDGET_MISSING" audit-report.log; then
+            echo '::error::Аудит IPA не прошёл: отсутствует основной bundle или виджет'
+            exit 1
+          fi
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AppGroupProbe-unsigned-ipa
+          path: AppGroupProbe-unsigned.ipa
+          if-no-files-found: error
+
+      - name: Upload audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: AppGroupProbe-audit-report
+          path: audit-report.log
+          if-no-files-found: warn

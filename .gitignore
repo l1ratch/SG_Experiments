@@ -1,0 +1,23 @@
+# Root
+.DS_Store
+
+# Build artifacts (never commit generated project / build output)
+build/
+dist/
+*.ipa
+*.zip
+xcuserdata/
+DerivedData/
+AppGroupProbe/AppGroupProbe.xcodeproj
+*.xcuserstate
+
+# Local signing material — NEVER commit secrets
+*.p12
+*.p8
+*.cer
+*.mobileprovision
+*.pem
+*.key
+
+# Logs
+*.log

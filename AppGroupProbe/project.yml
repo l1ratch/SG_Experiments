@@ -1,0 +1,88 @@
+name: AppGroupProbe
+options:
+  bundleIdPrefix: app.yam53
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+
+configs:
+  Release: release
+
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    TARGETED_DEVICE_FAMILY: "1,2"
+    CODE_SIGN_STYLE: Manual
+    # Сборка всегда идёт без подписи — подписывает GBox.
+    CODE_SIGNING_ALLOWED: "NO"
+    CODE_SIGNING_REQUIRED: "NO"
+    CODE_SIGN_IDENTITY: ""
+
+targets:
+  AppGroupProbe:
+    type: application
+    platform: iOS
+    sources:
+      - path: AppGroupProbe
+      - path: Shared
+    dependencies:
+      - target: AppGroupProbeWidget
+        embed: true
+    configFiles:
+      Release: Probe.xcconfig
+    info:
+      path: AppGroupProbe/Info.plist
+      properties:
+        CFBundleDisplayName: AppGroupProbe
+        CFBundleShortVersionString: "1.0.0"
+        CFBundleVersion: "1"
+        UILaunchScreen: {}
+        UIApplicationSupportsIndirectInputEvents: true
+        # App Group передаётся в рантайме через Info.plist — значение подставляется
+        # из Probe.xcconfig на этапе сборки (PROCESSINFOPLIST, не codesign).
+        AppGroupIdentifier: "$(PROBE_APP_GROUP_ID)"
+    entitlements:
+      path: AppGroupProbe/AppGroupProbe.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.c2fefdd0db2e255e.1
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: "$(PROBE_MAIN_BUNDLE_ID)"
+
+  AppGroupProbeWidget:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: AppGroupProbeWidget
+      - path: Shared
+    configFiles:
+      Release: Probe.xcconfig
+    info:
+      path: AppGroupProbeWidget/Info.plist
+      properties:
+        CFBundleDisplayName: AppGroupProbe
+        CFBundleShortVersionString: "1.0.0"
+        CFBundleVersion: "1"
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+        # Та же группа, тот же источник конфигурации (Probe.xcconfig).
+        AppGroupIdentifier: "$(PROBE_APP_GROUP_ID)"
+    entitlements:
+      path: AppGroupProbeWidget/AppGroupProbeWidget.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.c2fefdd0db2e255e.1
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: "$(PROBE_WIDGET_BUNDLE_ID)"
+
+schemes:
+  AppGroupProbe:
+    build:
+      targets:
+        AppGroupProbe: all
+    run:
+      config: Release
+    archive:
+      config: Release

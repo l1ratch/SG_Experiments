@@ -1,0 +1,18 @@
+# Нормализация концов строк: в репозитории всегда LF.
+# Скрипты обязаны оставаться LF — иначе bash на macOS runner не выполнит их.
+
+* text=auto eol=lf
+*.sh text eol=lf
+*.swift text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.xcconfig text eol=lf
+*.plist text eol=lf
+*.md text eol=lf
+*.gitignore text eol=lf
+
+# Бинарные
+*.png binary
+*.ipa binary
+*.mobileprovision binary
+*.p12 binary
