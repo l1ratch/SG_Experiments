@@ -53,19 +53,19 @@ jobs:
           INPUT_BUNDLE_ID: ${{ github.event.inputs.bundle_id }}
           INPUT_APP_GROUP: ${{ github.event.inputs.app_group }}
         run: |
-          XC="AppGroupProbe/Probe.xcconfig"
+          SPEC="AppGroupProbe/project.yml"
           if [ -n "$INPUT_BUNDLE_ID" ]; then
-            echo "Overriding PROBE_MAIN_BUNDLE_ID=$INPUT_BUNDLE_ID"
-            sed -i '' "s|^PROBE_MAIN_BUNDLE_ID = .*|PROBE_MAIN_BUNDLE_ID = $INPUT_BUNDLE_ID|" "$XC"
-            sed -i '' "s|^PROBE_WIDGET_BUNDLE_ID = .*|PROBE_WIDGET_BUNDLE_ID = $INPUT_BUNDLE_ID.widget|" "$XC"
+            echo "Overriding bundle IDs: $INPUT_BUNDLE_ID"
+            sed -i '' "s|PRODUCT_BUNDLE_IDENTIFIER: app.yam53.taro5888.widget|PRODUCT_BUNDLE_IDENTIFIER: $INPUT_BUNDLE_ID.widget|" "$SPEC"
+            sed -i '' "s|PRODUCT_BUNDLE_IDENTIFIER: app.yam53.taro5888$|PRODUCT_BUNDLE_IDENTIFIER: $INPUT_BUNDLE_ID|" "$SPEC"
           fi
           if [ -n "$INPUT_APP_GROUP" ]; then
             echo "Overriding PROBE_APP_GROUP_ID=$INPUT_APP_GROUP"
-            sed -i '' "s|^PROBE_APP_GROUP_ID = .*|PROBE_APP_GROUP_ID = $INPUT_APP_GROUP|" "$XC"
-            # Группа в entitlements обязана совпадать — обновляем project.yml
-            sed -i '' "s|          - group\\..*|          - $INPUT_APP_GROUP|" "AppGroupProbe/project.yml"
+            sed -i '' "s|PROBE_APP_GROUP_ID: .*|PROBE_APP_GROUP_ID: $INPUT_APP_GROUP|" "$SPEC"
+            # Группа в entitlements обязана совпадать — обновляем тоже
+            sed -i '' "s|^          - group\..*|          - $INPUT_APP_GROUP|" "$SPEC"
           fi
-          cat "$XC"
+          grep -n "PROBE_APP_GROUP_ID\|PRODUCT_BUNDLE_IDENTIFIER" "$SPEC"
 
       - name: Install XcodeGen
         run: |
@@ -84,18 +84,16 @@ jobs:
           set -o pipefail
           xcodebuild \
             -project AppGroupProbe.xcodeproj \
-            -scheme AppGroupProbe \
+            -target AppGroupProbe \
             -configuration Release \
             -sdk iphoneos \
-            -destination 'generic/platform=iOS' \
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
             COMPILER_INDEX_STORE_ENABLE=NO \
             build 2>&1 | tee build.log | grep -E "error:|warning:|BUILD|ProcessInfoPlist|entitlement" || true
-          # Проверяем реальный итог: tee + pipefail уже вернул бы ошибку, но
-          # убедимся явно по логу.
+          # Проверяем реальный итог по логу.
           if ! grep -q "BUILD SUCCEEDED" build.log; then
             echo '::error::Сборка не удалась — последние 200 строк лога:'
             tail -200 build.log

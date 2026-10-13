@@ -5,18 +5,20 @@ options:
     iOS: "17.0"
   createIntermediateGroups: true
 
-configs:
-  Release: release
-
+# Единая конфигурация идентичности (общая для всех таргетов).
+# PROBE_APP_GROUP_ID — единственная точка выбора App Group; значение
+# подставляется в Info.plist каждого bundle (ключ AppGroupIdentifier)
+# на этапе сборки. Группа НЕ вычисляется из Bundle ID.
 settings:
   base:
     SWIFT_VERSION: "5.9"
     TARGETED_DEVICE_FAMILY: "1,2"
     CODE_SIGN_STYLE: Manual
-    # Сборка всегда идёт без подписи — подписывает GBox.
+    # Сборка всегда идёт без подписи — финальную подпись ставит GBox.
     CODE_SIGNING_ALLOWED: "NO"
     CODE_SIGNING_REQUIRED: "NO"
     CODE_SIGN_IDENTITY: ""
+    PROBE_APP_GROUP_ID: group.c2fefdd0db2e255e.1
 
 targets:
   AppGroupProbe:
@@ -28,8 +30,6 @@ targets:
     dependencies:
       - target: AppGroupProbeWidget
         embed: true
-    configFiles:
-      Release: Probe.xcconfig
     info:
       path: AppGroupProbe/Info.plist
       properties:
@@ -37,9 +37,6 @@ targets:
         CFBundleShortVersionString: "1.0.0"
         CFBundleVersion: "1"
         UILaunchScreen: {}
-        UIApplicationSupportsIndirectInputEvents: true
-        # App Group передаётся в рантайме через Info.plist — значение подставляется
-        # из Probe.xcconfig на этапе сборки (PROCESSINFOPLIST, не codesign).
         AppGroupIdentifier: "$(PROBE_APP_GROUP_ID)"
     entitlements:
       path: AppGroupProbe/AppGroupProbe.entitlements
@@ -48,7 +45,7 @@ targets:
           - group.c2fefdd0db2e255e.1
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: "$(PROBE_MAIN_BUNDLE_ID)"
+        PRODUCT_BUNDLE_IDENTIFIER: app.yam53.taro5888
 
   AppGroupProbeWidget:
     type: app-extension
@@ -56,8 +53,6 @@ targets:
     sources:
       - path: AppGroupProbeWidget
       - path: Shared
-    configFiles:
-      Release: Probe.xcconfig
     info:
       path: AppGroupProbeWidget/Info.plist
       properties:
@@ -66,7 +61,6 @@ targets:
         CFBundleVersion: "1"
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
-        # Та же группа, тот же источник конфигурации (Probe.xcconfig).
         AppGroupIdentifier: "$(PROBE_APP_GROUP_ID)"
     entitlements:
       path: AppGroupProbeWidget/AppGroupProbeWidget.entitlements
@@ -75,14 +69,4 @@ targets:
           - group.c2fefdd0db2e255e.1
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: "$(PROBE_WIDGET_BUNDLE_ID)"
-
-schemes:
-  AppGroupProbe:
-    build:
-      targets:
-        AppGroupProbe: all
-    run:
-      config: Release
-    archive:
-      config: Release
+        PRODUCT_BUNDLE_IDENTIFIER: app.yam53.taro5888.widget

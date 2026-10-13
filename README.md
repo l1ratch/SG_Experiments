@@ -26,7 +26,7 @@
 
 ## Конфигурация (профиль EYD9KX)
 
-Один явный выбор, зафиксированный в [`AppGroupProbe/Probe.xcconfig`](AppGroupProbe/Probe.xcconfig):
+Один явный выбор, зафиксированный в [`AppGroupProbe/project.yml`](AppGroupProbe/project.yml):
 
 | Параметр | Значение | Источник |
 |---|---|---|
@@ -34,16 +34,18 @@
 | Widget Bundle ID | `app.yam53.taro5888.widget` | суффикс main; GBox применяет main-profile к расширениям |
 | App Group | `group.c2fefdd0db2e255e.1` | первая из пяти разрешённых групп профиля |
 
-Та же группа задана в entitlements обоих таргетов (`project.yml`, секции
-`entitlements`) и подставляется в Info.plist каждого bundle
+Все три значения задаются в **одном** месте `project.yml`: `settings.base`
+(общий для всех таргетов `PROBE_APP_GROUP_ID`) и `PRODUCT_BUNDLE_IDENTIFIER`
+в настройках таргетов. Группа подставляется в Info.plist каждого bundle
 (ключ `AppGroupIdentifier`) при сборке — код читает её из Info.plist и
-**не вычисляет из Bundle ID**.
+**не вычисляет из Bundle ID**. Та же группа задана в entitlements обоих
+таргетов (audit-скрипт проверяет совпадение).
 
 Изменение конфигурации:
-- в репозитории — правь `Probe.xcconfig` **и** entitlements в `project.yml`
-  (audit-скрипт проверяет их совпадение);
+- в репозитории — правь `project.yml` (значение `PROBE_APP_GROUP_ID` **и**
+  entitlements-блоки у обоих таргетов — держи их синхронными);
 - разовая сборка — параметры `bundle_id` / `app_group` при ручном запуске
-  workflow.
+  workflow (они подставляются в spec перед генерацией проекта).
 
 ## Структура
 
@@ -51,8 +53,7 @@
 SG_Experiments/
 ├── .github/workflows/build-appgroup-probe.yml   # CI: сборка unsigned IPA
 ├── AppGroupProbe/
-│   ├── Probe.xcconfig                           # единая конфигурация идентичности
-│   ├── project.yml                              # XcodeGen-спецификация проекта
+│   ├── project.yml                              # XcodeGen-спецификация + конфигурация идентичности
 │   ├── AppGroupProbe/                           # main app (SwiftUI)
 │   ├── AppGroupProbeWidget/                     # WidgetKit extension
 │   └── Shared/                                  # код, компилируемый в оба таргета
@@ -98,9 +99,8 @@ Workflow [`build-appgroup-probe.yml`](.github/workflows/build-appgroup-probe.yml
 brew install xcodegen
 cd AppGroupProbe
 xcodegen generate
-xcodebuild -project AppGroupProbe.xcodeproj -scheme AppGroupProbe \
-  -configuration Release -sdk iphoneos \
-  -destination 'generic/platform=iOS' -derivedDataPath build \
+xcodebuild -project AppGroupProbe.xcodeproj -target AppGroupProbe \
+  -configuration Release -sdk iphoneos -derivedDataPath build \
   CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build
 
 APP=$(find build/Build/Products/Release-iphoneos -maxdepth 1 -name "*.app")

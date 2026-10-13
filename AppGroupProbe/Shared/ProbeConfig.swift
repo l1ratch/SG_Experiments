@@ -4,8 +4,8 @@ import Foundation
 //
 // Единый источник конфигурации для основного приложения и Widget Extension.
 // Идентификатор App Group приходит из Info.plist каждого bundle (ключ
-// AppGroupIdentifier), куда он подставляется на этапе сборки из Probe.xcconfig
-// (PROBE_APP_GROUP_ID). Группа НЕ вычисляется из Bundle ID.
+// AppGroupIdentifier), куда он подставляется на этапе сборки из общего
+// значения PROBE_APP_GROUP_ID в project.yml. Группа НЕ вычисляется из Bundle ID.
 
 public enum ProbeConfig {
 

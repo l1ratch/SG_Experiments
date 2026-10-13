@@ -82,7 +82,7 @@ runtime-хуков на первом этапе).
 
 | Принцип из zxPluginsInject | Реализация в AppGroupProbe |
 |---|---|
-| Одна реальная группа, выбранная явно | `PROBE_APP_GROUP_ID = group.c2fefdd0db2e255e.1` в `Probe.xcconfig` |
+| Одна реальная группа, выбранная явно | `PROBE_APP_GROUP_ID: group.c2fefdd0db2e255e.1` в `project.yml` (settings.base, общие для таргетов) |
 | Одинаковая группа у всех процессов | один и тот же `AppGroupIdentifier` в Info.plist app и widget |
 | Namespace-подкаталог вместо «первой попавшейся» группы | `AppGroupProbe/probe-token.json` внутри контейнера |
 | Настоящий системный контейнер | только `containerURL(forSecurityApplicationGroupIdentifier:)` |
