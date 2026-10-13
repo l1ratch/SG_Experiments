@@ -70,3 +70,9 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.yam53.taro5888.widget
+
+schemes:
+  AppGroupProbe:
+    build:
+      targets:
+        AppGroupProbe: all

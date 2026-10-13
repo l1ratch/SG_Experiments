@@ -84,9 +84,10 @@ jobs:
           set -o pipefail
           xcodebuild \
             -project AppGroupProbe.xcodeproj \
-            -target AppGroupProbe \
+            -scheme AppGroupProbe \
             -configuration Release \
             -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
